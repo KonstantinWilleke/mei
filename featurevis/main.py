@@ -38,7 +38,7 @@ class TrainedEnsembleModelTemplate(dj.Manual):
         -> master.trained_model_table
         """
 
-    def create_ensemble(self, key):
+    def create_ensemble(self, key, model_keys=None):
         """Creates a new ensemble and inserts it into the table.
 
         Args:
@@ -53,9 +53,14 @@ class TrainedEnsembleModelTemplate(dj.Manual):
         if len(self.dataset_table() & key) != 1:
             raise ValueError("Provided key not sufficient to restrict dataset table to one entry!")
         dataset_key = (self.dataset_table().proj() & key).fetch1()
-        models = (self.trained_model_table().proj() & key).fetch(as_dict=True)
+        if model_keys is None:
+            models = (self.trained_model_table().proj() & key).fetch(as_dict=True)
+        else:
+            print("model dictionties were passed - creating ensemble with {} models".format(len(model_keys)))
+            models = model_keys
         ensemble_table_key = dict(dataset_key, ensemble_hash=integration.hash_list_of_dictionaries(models))
         self.insert1(ensemble_table_key)
+
         self.Member().insert([{**ensemble_table_key, **m} for m in models])
 
     def load_model(self, key=None):
