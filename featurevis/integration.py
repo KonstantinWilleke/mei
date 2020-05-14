@@ -7,7 +7,7 @@ from nnfabrik.utility.nnf_helper import split_module_name, dynamic_import
 from nnfabrik.utility.dj_helpers import make_hash
 
 
-def load_ensemble_model(member_table, trained_model_table, key=None):
+def load_ensemble_model(member_table, trained_model_table, key=None, include_dataloader=True, include_state_dict=True):
     """Loads an ensemble model.
 
     Args:
@@ -31,12 +31,25 @@ def load_ensemble_model(member_table, trained_model_table, key=None):
     else:
         query = member_table()
     model_keys = query.fetch(as_dict=True)
-    dataloaders, models = tuple(list(x) for x in zip(*[trained_model_table().load_model(key=k) for k in model_keys]))
+    if include_dataloader:
+        dataloaders, models = tuple(list(x) for x in zip(*[trained_model_table().load_model(key=k,
+                                                                                            include_dataloader=include_dataloader,
+                                                                                            include_state_dict=include_state_dict)
+                                                           for k in model_keys]))
+    else:
+        models = [trained_model_table().load_model(key=k,
+                                                   include_dataloader=include_dataloader,
+                                                   include_state_dict=include_state_dict)
+                  for k in model_keys]
+
     for model in models:
         model.eval()
         model.cuda()
-    return dataloaders[0], ensemble_model
 
+    if include_dataloader:
+        return dataloaders[0], ensemble_model
+    else:
+        return ensemble_model
 
 def get_output_selected_model(neuron_pos, session_id, model):
     """Creates a version of the model that has its output selected down to a single uniquely identified neuron.
