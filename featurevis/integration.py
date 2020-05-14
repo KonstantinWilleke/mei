@@ -1,62 +1,11 @@
+"""This module contains classes and functions pertaining to the NNFabrik integration."""
+
 import pickle
 
 import torch
 
-from nnfabrik.utility.nn_helpers import get_dims_for_loader_dict
 from nnfabrik.utility.nnf_helper import split_module_name, dynamic_import
 from nnfabrik.utility.dj_helpers import make_hash
-
-
-def load_ensemble_model(member_table, trained_model_table, key=None):
-    """Loads an ensemble model.
-
-    Args:
-        member_table: A Datajoint table containing a subset of the trained models in the trained model table.
-        trained_model_table: A Datajoint table containing trained models. Must have a method called "load_model" which
-            must itself return a PyTorch module.
-        key: A dictionary used to restrict the member table.
-
-    Returns:
-        A function that has the model's input as parameters and returns the mean output across the individual models
-        in the ensemble.
-    """
-
-    def ensemble_model(x, *args, **kwargs):
-        outputs = [m(x, *args, **kwargs) for m in models]
-        mean_output = torch.stack(outputs, dim=0).mean(dim=0)
-        return mean_output
-
-    if key:
-        query = member_table() & key
-    else:
-        query = member_table()
-    model_keys = query.fetch(as_dict=True)
-    dataloaders, models = tuple(list(x) for x in zip(*[trained_model_table().load_model(key=k) for k in model_keys]))
-    for model in models:
-        model.eval()
-    return dataloaders[0], ensemble_model
-
-
-def get_output_selected_model(neuron_pos, session_id, model):
-    """Creates a version of the model that has its output selected down to a single uniquely identified neuron.
-
-    Args:
-        neuron_pos: An integer, the position of the neuron in the model's output.
-        session_id: A string that uniquely identifies one of the model's readouts.
-        model: A PyTorch module that can be called with a keyword argument called "data_key". The output of the
-            module is expected to be a two dimensional Torch tensor where the first dimension corresponds to the
-            batch size and the second to the number of neurons.
-
-    Returns:
-        A function that takes the model input(s) as parameter(s) and returns the model output corresponding to the
-        selected neuron.
-    """
-
-    def output_selected_model(x, *args, **kwargs):
-        output = model(x, *args, data_key=session_id, **kwargs)
-        return output[:, neuron_pos]
-
-    return output_selected_model
 
 
 def get_mappings(dataset_config, key, load_func=None):
@@ -74,11 +23,6 @@ def load_pickled_data(path):
     with open(path, "rb") as datafile:
         data = pickle.load(datafile)
     return data
-
-
-def get_input_shape(dataloaders, get_dims_func=get_dims_for_loader_dict):
-    """Gets the shape of the input that the model expects from the dataloaders."""
-    return list(get_dims_func(dataloaders["train"]).values())[0]["inputs"]
 
 
 def import_module(path):
@@ -134,3 +78,88 @@ def hash_list_of_dictionaries(list_of_dicts):
     dict_of_dicts = {make_hash(d): d for d in list_of_dicts}
     sorted_list_of_dicts = [dict_of_dicts[h] for h in sorted(dict_of_dicts)]
     return make_hash(sorted_list_of_dicts)
+
+
+class EnsembleModel:
+    """A ensemble model consisting of several individual ensemble members.
+
+    Attributes:
+        *members: PyTorch modules representing the members of the ensemble.
+    """
+
+    def __init__(self, *members):
+        """Initializes EnsembleModel."""
+        self.members = members
+
+    def __call__(self, x, *args, **kwargs):
+        """Calculates the forward pass through the ensemble.
+
+        The input is passed through all individual members of the ensemble and their outputs are averaged.
+
+        Args:
+            x: A tensor representing the input to the ensemble.
+            *args: Additional arguments will be passed to all ensemble members.
+            **kwargs: Additional keyword arguments will be passed to all ensemble members.
+
+        Returns:
+            A tensor representing the ensemble's output.
+        """
+        outputs = [m(x, *args, **kwargs) for m in self.members]
+        mean_output = torch.stack(outputs, dim=0).mean(dim=0)
+        return mean_output
+
+    def eval(self):
+        """Switches all ensemble members to evaluation mode."""
+        for member in self.members:
+            member.eval()
+
+    def to(self, *args, **kwargs):
+        """Moves and/or casts the parameters and buffers of all ensemble members."""
+        for member in self.members:
+            member.to(*args, **kwargs)
+
+    def __repr__(self):
+        return f"{self.__class__.__qualname__}({', '.join(self.members)})"
+
+
+class ConstrainedOutputModel:
+    """A model that has its output constrained.
+
+    Attributes:
+        model: A PyTorch module.
+        constraint: An integer representing the index of a neuron in the model's output. Only the value corresponding
+            to that index will be returned.
+        forward_kwargs: A dictionary containing keyword arguments that will be passed to the model every time it is
+            called. Optional.
+    """
+
+    def __init__(self, model, constraint, forward_kwargs=None):
+        """Initializes ConstrainedOutputModel."""
+        self.model = model
+        self.constraint = constraint
+        self.forward_kwargs = forward_kwargs if forward_kwargs else dict()
+
+    def __call__(self, x, *args, **kwargs):
+        """Computes the constrained output of the model.
+
+        Args:
+            x: A tensor representing the input to the model.
+            *args: Additional arguments will be passed to the model.
+            **kwargs: Additional keyword arguments will be passed to the model.
+
+        Returns:
+            A tensor representing the constrained output of the model.
+        """
+        output = self.model(x, *args, **self.forward_kwargs, **kwargs)
+        return output[:, self.constraint]
+
+    def eval(self):
+        """Switches the model to evaluation mode."""
+        self.model.eval()
+
+    def to(self, *args, **kwargs):
+        """Moves and/or casts the parameters and buffers of the model."""
+        self.model.to(*args, **kwargs)
+
+    def __repr__(self):
+        return f"{self.__class__.__qualname__}({self.model}, {self.constraint}, forward_kwargs={self.forward_kwargs})"
