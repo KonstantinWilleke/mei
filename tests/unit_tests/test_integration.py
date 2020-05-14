@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 
 import pytest
 import torch
@@ -44,28 +44,6 @@ def fake_trained_model_table():
     return _fake_trained_model_table
 
 
-class TestLoadEnsemble:
-    def test_load_ensemble(self, fake_trained_model_table):
-        dataloaders, ensemble_model = integration.load_ensemble_model(FakeMemberTable, fake_trained_model_table())
-        ensemble_input = torch.tensor([1, 2, 3], dtype=torch.float)
-        expected_output = torch.tensor([2, 4, 6], dtype=torch.float)
-        assert dataloaders == "dataloaders0"
-        assert torch.allclose(ensemble_model(ensemble_input), expected_output)
-
-    def test_eval_mode(self, fake_trained_model_table):
-        fake_trained_model_table = fake_trained_model_table()
-        integration.load_ensemble_model(FakeMemberTable, fake_trained_model_table)
-        for model in fake_trained_model_table.models:
-            model.eval.assert_called_once()
-
-
-def test_get_output_selected_model():
-    model = integration.get_output_selected_model(0, 10, FakeModel(1))
-    output = model(torch.tensor([[1, 2, 3]], dtype=torch.float))
-    expected_output = torch.tensor([[11]], dtype=torch.float)
-    assert output == expected_output
-
-
 def get_fake_load_function(data):
     def fake_load_function(path):
         return data[path]
@@ -89,36 +67,6 @@ def test_get_mappings():
 
 def fake_get_dims(dataloaders):
     return dataloaders
-
-
-def test_get_input_shape():
-    dataloaders = dict(
-        train=dict(session_id0=dict(inputs=0), session_id1=dict(inputs=1)),
-        validation=dict(session_id0=dict(inputs=2), session_id1=dict(inputs=3)),
-    )
-    shape = integration.get_input_shape(dataloaders, get_dims_func=fake_get_dims)
-    assert shape == 0
-
-
-@pytest.mark.parametrize("raw_optim_kwargs,optim_kwargs", [(None, dict()), (dict(a=1), dict(a=1))])
-def test_prepare_mei_method(raw_optim_kwargs, optim_kwargs):
-    method = dict(
-        method_id=0,
-        optim_kwargs=raw_optim_kwargs,
-        transform="module0.func1",
-        regularization=None,
-        gradient_f="module3.func6",
-        post_update=None,
-    )
-    prepared = integration.prepare_mei_method(method, import_func=lambda x: x)
-    expected = dict(
-        optim_kwargs=optim_kwargs,
-        transform="module0.func1",
-        regularization=None,
-        gradient_f="module3.func6",
-        post_update=None,
-    )
-    assert prepared == expected
 
 
 class TestModelLoader:
@@ -170,3 +118,77 @@ class TestHashListOfDictionaries:
         list_of_dicts1 = [dict(a=3, b=5), dict(a=1, b=2), dict(a=2, b=8)]
         list_of_dicts2 = [dict(a=1, b=2), dict(a=3, b=5), dict(a=2, b=8)]
         assert self.hash_and_compare(list_of_dicts1, list_of_dicts2)
+
+
+class TestEnsembleModel:
+    @pytest.fixture
+    def members(self):
+        member1 = MagicMock(return_value=torch.tensor([1.0, 2.0, 3.0]))
+        member2 = MagicMock(return_value=torch.tensor([4.0, 5.0, 6.0]))
+        member3 = MagicMock(return_value=torch.tensor([7.0, 8.0, 9.0]))
+        return member1, member2, member3
+
+    def test_if_input_is_passed_to_ensemble_members(self, members):
+        ensemble = integration.EnsembleModel(*members)
+        ensemble("x", "arg", kwarg="kwarg")
+        for member in members:
+            member.assert_called_once_with("x", "arg", kwarg="kwarg")
+
+    def test_if_outputs_of_ensemble_members_is_correctly_averaged(self, members):
+        ensemble = integration.EnsembleModel(*members)
+        output = ensemble("x")
+        assert torch.allclose(output, torch.tensor([4.0, 5.0, 6.0]))
+
+    def test_if_eval_mode_is_passed_to_ensemble_members(self, members):
+        ensemble = integration.EnsembleModel(*members)
+        ensemble.eval()
+        for member in members:
+            member.eval.assert_called_once_with()
+
+    def test_if_to_is_correctly_called_on_all_ensemble_members(self, members):
+        ensemble = integration.EnsembleModel(*members)
+        ensemble.to("arg", kwarg="kwarg")
+        for member in members:
+            member.to.assert_called_once_with("arg", kwarg="kwarg")
+
+    def test_repr(self):
+        ensemble = integration.EnsembleModel("member1", "member2", "member3")
+        assert str(ensemble) == "EnsembleModel(member1, member2, member3)"
+
+
+class TestConstrainedOutputModel:
+    @pytest.fixture
+    def model(self):
+        return MagicMock(return_value=torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]]))
+
+    def test_if_input_is_passed_to_model(self, model):
+        constrained_model = integration.ConstrainedOutputModel(model, 0)
+        constrained_model("x", "arg", kwarg="kwarg")
+        model.assert_called_once_with("x", "arg", kwarg="kwarg")
+
+    @pytest.mark.parametrize("constraint,expected", [(0, 1.0), (1, 2.0), (2, 3.0), (3, 4.0), (4, 5.0)])
+    def test_if_output_constraint_is_correct(self, model, constraint, expected):
+        constrained_model = integration.ConstrainedOutputModel(model, constraint)
+        output = constrained_model("x")
+        assert torch.allclose(output, torch.tensor([expected]))
+
+    def test_if_eval_mode_is_passed_to_model(self, model):
+        constrained_model = integration.ConstrainedOutputModel(model, 0)
+        constrained_model.eval()
+        model.eval.assert_called_once_with()
+
+    def test_if_cuda_is_passed_to_model(self, model):
+        constrained_model = integration.ConstrainedOutputModel(model, 0)
+        constrained_model.to("arg", kwarg="kwarg")
+        model.to.assert_called_once_with("arg", kwarg="kwarg")
+
+    def test_if_forward_kwargs_are_passed_to_model(self, model):
+        constrained_model = integration.ConstrainedOutputModel(
+            model, 0, forward_kwargs=dict(forward_kwarg="forward_kwarg")
+        )
+        constrained_model("x")
+        model.assert_called_once_with("x", forward_kwarg="forward_kwarg")
+
+    def test_repr(self):
+        constrained_model = integration.ConstrainedOutputModel("model", 0, forward_kwargs=dict(kwarg="kwarg"))
+        assert str(constrained_model) == "ConstrainedOutputModel(model, 0, forward_kwargs={'kwarg': 'kwarg'})"
