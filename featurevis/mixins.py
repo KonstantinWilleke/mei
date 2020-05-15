@@ -52,13 +52,23 @@ class TrainedEnsembleModelTemplateMixin:
         self.insert1(dict(primary_key, ensemble_comment=comment))
         self.Member().insert([{**primary_key, **m} for m in models])
 
-    def load_model(self, key: Optional[Key] = None) -> Tuple[Dataloaders, integration.EnsembleModel]:
-        return self._load_ensemble_model(key=key)
+    def load_model(self, key: Optional[Key] = None,
+                   include_dataloader: Optional[bool] = True,
+                   include_state_dict: Optional[bool] = True,) -> Tuple[Dataloaders, integration.EnsembleModel]:
 
-    def _load_ensemble_model(self, key: Optional[Key] = None) -> Tuple[Dataloaders, integration.EnsembleModel]:
+        return self._load_ensemble_model(key=key,
+                                         include_dataloader=include_dataloader,
+                                         include_state_dict=include_state_dict)
+
+    def _load_ensemble_model(self, key: Optional[Key] = None,
+                             include_dataloader: Optional[bool] = True,
+                             include_state_dict: Optional[bool] = True,
+                             ) -> Tuple[Dataloaders, integration.EnsembleModel]:
         model_keys = (self.trained_model_table() & key).fetch(as_dict=True)
         dataloaders, models = tuple(
-            list(x) for x in zip(*[self.trained_model_table().load_model(key=k) for k in model_keys])
+            list(x) for x in zip(*[self.trained_model_table().load_model(key=k,
+                                                                         include_dataloader=include_dataloader,
+                                                                         include_state_dict=include_state_dict) for k in model_keys])
         )
         return dataloaders[0], self.ensemble_model_class(*models)
 
