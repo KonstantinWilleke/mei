@@ -130,8 +130,12 @@ class MEIMethodMixin:
     def generate_mei(self, dataloaders: Dataloaders, model: Module, key: Key, seed: int) -> Dict[str, Any]:
         method_fn, method_config = (self & key).fetch1("method_fn", "method_config")
         method_fn = self.import_func(method_fn)
+        if 'create_initial_guess' in method_config:
+            create_initial_guess = self.import_func(method_config.pop("create_initial_guess"))
+        else:
+            create_initial_guess = torch.randn
         mei, score, output = method_fn(dataloaders, model, method_config, seed)
-        return dict(key, mei=mei, score=score, output=output)
+        return dict(key, mei=mei, score=score, output=output, create_initial_guess=create_initial_guess)
 
 
 class MEISeedMixin:
