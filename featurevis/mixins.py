@@ -43,11 +43,12 @@ class TrainedEnsembleModelTemplateMixin:
 
     insert1: Callable[[Mapping], None]
 
-    def create_ensemble(self, key: Key, comment: str = "") -> None:
+    def create_ensemble(self, key: Key, models = None, comment: str = "") -> None:
         if len(self.dataset_table() & key) != 1:
             raise ValueError("Provided key not sufficient to restrict dataset table to one entry!")
         dataset_key = (self.dataset_table().proj() & key).fetch1()
-        models = (self.trained_model_table().proj() & key).fetch(as_dict=True)
+        if models is None:
+            models = (self.trained_model_table().proj() & key).fetch(as_dict=True)
         primary_key = dict(dataset_key, ensemble_hash=integration.hash_list_of_dictionaries(models))
         self.insert1(dict(primary_key, ensemble_comment=comment))
         self.Member().insert([{**primary_key, **m} for m in models])
