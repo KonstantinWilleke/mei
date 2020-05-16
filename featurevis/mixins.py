@@ -114,6 +114,7 @@ class MEIMethodMixin:
     method_hash                         : varchar(32)   # hash of the method config
     ---
     method_config                       : longblob      # method configuration object
+    method_comment        = ''          : varchar(256)  # a short comment describing the method
     method_ts       = CURRENT_TIMESTAMP : timestamp     # UTZ timestamp at time of insertion
     """
 
@@ -124,8 +125,8 @@ class MEIMethodMixin:
     seed_table = None
     import_func = staticmethod(integration.import_module)
 
-    def add_method(self, method_fn: str, method_config: Mapping) -> None:
-        self.insert1(dict(method_fn=method_fn, method_hash=make_hash(method_config), method_config=method_config))
+    def add_method(self, method_fn: str, method_config: Mapping, method_comment: Optional[str] = '') -> None:
+        self.insert1(dict(method_fn=method_fn, method_hash=make_hash(method_config), method_config=method_config, method_comment=method_comment))
 
     def generate_mei(self, dataloaders: Dataloaders, model: Module, key: Key, seed: int) -> Dict[str, Any]:
         method_fn, method_config = (self & key).fetch1("method_fn", "method_config")
