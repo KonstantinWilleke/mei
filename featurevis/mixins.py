@@ -135,8 +135,8 @@ class MEIMethodMixin:
             create_initial_guess = self.import_func(method_config.pop("create_initial_guess"))
         else:
             create_initial_guess = torch.randn
-        mei, score, output = method_fn(dataloaders, model, method_config, seed)
-        return dict(key, mei=mei, score=score, output=output, create_initial_guess=create_initial_guess)
+        mei, score, output = method_fn(dataloaders, model, method_config, seed, create_initial_guess=create_initial_guess)
+        return dict(key, mei=mei, score=score, output=output)
 
 
 class MEISeedMixin:
