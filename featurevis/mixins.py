@@ -56,7 +56,8 @@ class TrainedEnsembleModelTemplateMixin:
     def load_model(self, key: Optional[Key] = None,
                    include_dataloader: Optional[bool] = True,
                    include_state_dict: Optional[bool] = True,) -> Tuple[Dataloaders, integration.EnsembleModel]:
-
+        if key is None:
+            key = self.fetch1('KEY')
         return self._load_ensemble_model(key=key,
                                          include_dataloader=include_dataloader,
                                          include_state_dict=include_state_dict)
