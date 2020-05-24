@@ -80,7 +80,7 @@ class TrainedEnsembleModelTemplateMixin:
                                                        include_state_dict=include_state_dict)
                       for k in model_keys]
 
-        return dataloaders[0], self.ensemble_model_class(*models)
+        return (dataloaders[0], self.ensemble_model_class(*models)) if include_dataloader else self.ensemble_model_class(*models)
 
 
 class CSRFV1SelectorTemplateMixin:
