@@ -67,11 +67,19 @@ class TrainedEnsembleModelTemplateMixin:
                              include_state_dict: Optional[bool] = True,
                              ) -> Tuple[Dataloaders, integration.EnsembleModel]:
         model_keys = (self.Member() & key).fetch(as_dict=True)
-        dataloaders, models = tuple(
-            list(x) for x in zip(*[self.trained_model_table().load_model(key=k,
-                                                                         include_dataloader=include_dataloader,
-                                                                         include_state_dict=include_state_dict) for k in model_keys])
-        )
+        if include_dataloader:
+            dataloaders, models = tuple(
+                list(x) for x in zip(*[self.trained_model_table().load_model(key=k,
+                                                                             include_dataloader=include_dataloader,
+                                                                             include_state_dict=include_state_dict)
+                                       for k in model_keys])
+            )
+        else:
+            models = [self.trained_model_table().load_model(key=k,
+                                                       include_dataloader=include_dataloader,
+                                                       include_state_dict=include_state_dict)
+                      for k in model_keys]
+
         return dataloaders[0], self.ensemble_model_class(*models)
 
 
