@@ -14,7 +14,8 @@ from .tracking import Tracker
 
 
 def get_input_dimensions(dataloaders, get_dims):
-    return list(get_dims(dataloaders["train"]).values())[0]["inputs"]
+    in_name, _ = next(iter(list(dataloaders["train"].values())[0]))._fields
+    return list(get_dims(dataloaders["train"]).values())[0][in_name]
 
 
 def gradient_ascent(
