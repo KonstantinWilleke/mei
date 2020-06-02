@@ -462,9 +462,14 @@ class ChangeStd:
 
     def __init__(self, std):
         self.std = std
+        print("init STD ... ")
 
     @varargin
     def __call__(self, x, iteration=None):
         x_std = torch.std(x.view(len(x), -1), dim=-1)
+        x_mean = torch.mean(x.view(len(x), -1), dim=-1)
         fixed_std = x * (self.std / (x_std + 1e-9)).view(len(x), *[1] * (x.dim() - 1))
-        return fixed_std
+
+        x_mean_rescaled = torch.mean(fixed_std.view(len(fixed_std), -1), dim=-1)
+        rescaled_x = fixed_std + (x_mean - x_mean_rescaled).view(len(x), *[1] * (x.dim() - 1))
+        return rescaled_x
