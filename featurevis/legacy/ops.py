@@ -462,7 +462,6 @@ class ChangeStd:
 
     def __init__(self, std):
         self.std = std
-        print("init STD ... ")
 
     @varargin
     def __call__(self, x, iteration=None):
