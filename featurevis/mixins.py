@@ -135,7 +135,7 @@ class MEIMethodMixin:
     import_func = staticmethod(integration.import_module)
 
     def add_method(self, method_fn: str, method_config: Mapping, method_comment: Optional[str] = '') -> None:
-        self.insert1(dict(method_fn=method_fn, method_hash=make_hash(method_config), method_config=method_config, method_comment=method_comment))
+        self.insert1(dict(method_fn=method_fn, method_hash=make_hash(method_config), method_config=method_config, method_comment=method_comment), skip_duplicates=True)
 
     def generate_mei(self, dataloaders: Dataloaders, model: Module, key: Key, seed: int) -> Dict[str, Any]:
         method_fn, method_config = (self & key).fetch1("method_fn", "method_config")
