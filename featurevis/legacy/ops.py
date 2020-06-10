@@ -460,8 +460,9 @@ class ChangeStd:
         std (float or tensor): Desired std. If tensor, it should be the same length as x.
     """
 
-    def __init__(self, std):
+    def __init__(self, std, zero_mean=True):
         self.std = std
+        self.zero_mean = zero_mean
 
     @varargin
     def __call__(self, x, iteration=None):
@@ -471,4 +472,5 @@ class ChangeStd:
 
         x_mean_rescaled = torch.mean(fixed_std.view(len(fixed_std), -1), dim=-1)
         rescaled_x = fixed_std + (x_mean - x_mean_rescaled).view(len(x), *[1] * (x.dim() - 1))
-        return rescaled_x
+
+        return fixed_std if self.zero_mean else rescaled_x
