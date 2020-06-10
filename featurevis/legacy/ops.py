@@ -458,11 +458,11 @@ class ChangeStd:
 
         Arguments:
         std (float or tensor): Desired std. If tensor, it should be the same length as x.
-        zero_mean (boolean):   If False, the mean of x will be preserved after the std is changed. Defaults to True,
-                                   meaning that the mean will always converge to 0 by default.
+        zero_mean (boolean):   If False, the mean of x will be preserved after the std is changed. Defaults to False,
+                                   such that the mean will is preserved by default.
     """
 
-    def __init__(self, std, zero_mean=True):
+    def __init__(self, std, zero_mean=False):
         self.std = std
         self.zero_mean = zero_mean
 
