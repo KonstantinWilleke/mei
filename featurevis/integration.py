@@ -126,6 +126,9 @@ class EnsembleModel:
         for member in self.members:
             member.to(*args, **kwargs)
 
+    def parameters(self, member=0):
+        return self.members[member].parameters()
+
     def __repr__(self):
         return f"{self.__class__.__qualname__}({', '.join(self.members)})"
 
