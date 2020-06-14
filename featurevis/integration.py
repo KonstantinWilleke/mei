@@ -86,6 +86,7 @@ class EnsembleModel:
     Attributes:
         *members: PyTorch modules representing the members of the ensemble.
     """
+    training = True
 
     def __init__(self, *members):
         """Initializes EnsembleModel."""
@@ -112,6 +113,13 @@ class EnsembleModel:
         """Switches all ensemble members to evaluation mode."""
         for member in self.members:
             member.eval()
+        self.training = False
+
+    def train(self):
+        """Switches all ensemble members to training mode."""
+        for member in self.members:
+            member.train()
+        self.training = True
 
     def to(self, *args, **kwargs):
         """Moves and/or casts the parameters and buffers of all ensemble members."""
