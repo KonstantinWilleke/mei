@@ -115,11 +115,11 @@ class EnsembleModel:
             member.eval()
         self.training = False
 
-    def train(self):
+    def train(self, mode=True):
         """Switches all ensemble members to training mode."""
         for member in self.members:
-            member.train()
-        self.training = True
+            member.train() if mode else member.eval()
+        self.training = True if mode else False
 
     def to(self, *args, **kwargs):
         """Moves and/or casts the parameters and buffers of all ensemble members."""
