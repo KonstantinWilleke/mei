@@ -1,20 +1,15 @@
 """Contains classes and functions related to optimizing an input to a function such that its value is maximized."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, Tuple
+from typing import Callable, Tuple
 
 import torch
+from torch import Tensor
+from torch.optim.optimizer import Optimizer
 
-from .domain import State
-
-# Prevents circular import error
-if TYPE_CHECKING:
-    from torch import Tensor
-    from torch.optim.optimizer import Optimizer
-
-    from .stoppers import OptimizationStopper
-    from .domain import Input
-    from .tracking import Tracker
+from .domain import Input, State
+from .stoppers import OptimizationStopper
+from .tracking import Tracker
 
 
 def default_transform(mei: Tensor, _i_iteration: int) -> Tensor:
@@ -40,12 +35,13 @@ def default_postprocessing(mei: Tensor, _i_iteration: int) -> Tensor:
 class MEI:
     """Wrapper around the function and the MEI tensor."""
 
+    input_cls = Input
     state_cls = State
 
     def __init__(
         self,
         func: Callable[[Tensor], Tensor],
-        initial: Input,
+        initial: Tensor,
         optimizer: Optimizer,
         transform: Callable[[Tensor, int], Tensor] = default_transform,
         regularization: Callable[[Tensor, int], Tensor] = default_regularization,
@@ -57,7 +53,7 @@ class MEI:
         Args:
             func: A callable that will receive the to be optimized MEI tensor of floats as its only argument and that
                 must return a tensor containing a single float.
-            initial: An instance of "Input" initialized with the tensor from which the optimization process will start.
+            initial: A tensor from which the optimization process will start.
             optimizer: A PyTorch-style optimizer class.
             transform: A callable that will receive the current MEI and the index of the current iteration as inputs and
                 that must return a transformed version of the current MEI. Optional.
@@ -69,6 +65,7 @@ class MEI:
                 parameters and that should return a post-processed MEI. The operation performed by this callable on the
                 MEI has no influence on its gradient.
         """
+        initial = self.input_cls(initial)
         self.func = func
         self.initial = initial.clone()
         self.optimizer = optimizer
@@ -78,13 +75,13 @@ class MEI:
         self.postprocessing = postprocessing
         self.i_iteration = 0
         self._current_input = initial
-        self.__transformed_input = None
+        self._transformed = None
 
     @property
     def _transformed_input(self) -> Tensor:
-        if self.__transformed_input is None:
-            self.__transformed_input = self.transform(self._current_input.tensor, self.i_iteration)
-        return self.__transformed_input
+        if self._transformed is None:
+            self._transformed = self.transform(self._current_input.tensor, self.i_iteration)
+        return self._transformed
 
     def evaluate(self) -> Tensor:
         """Evaluates the function on the current MEI."""
@@ -108,7 +105,7 @@ class MEI:
         self.optimizer.step()
         self._current_input.data = self.postprocessing(self._current_input.data, self.i_iteration)
         state["post_processed_input"] = self._current_input.cloned_data
-        self.__transformed_input = None
+        self._transformed = None
         self.i_iteration += 1
         return self.state_cls.from_dict(state)
 

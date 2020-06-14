@@ -5,8 +5,8 @@ from contextlib import contextmanager
 
 import pytest
 
-from featurevis import objectives
-from featurevis.domain import State
+from mei import objectives
+from mei.domain import State
 
 
 @contextmanager
@@ -14,8 +14,23 @@ def does_not_raise():
     yield
 
 
-def test_if_objective_is_subclass_of_abc():
-    assert issubclass(objectives.Objective, ABC)
+class TestObjective:
+    @pytest.fixture
+    def fake_objective(self):
+        class FakeObjective(objectives.Objective):
+            compute = MagicMock(name="FakeObjective().compute", return_value="result")
+
+        return FakeObjective
+
+    def test_if_objective_is_subclass_of_abc(self):
+        assert issubclass(objectives.Objective, ABC)
+
+    def test_if_compute_is_called_correctly(self, fake_objective):
+        fake_objective()("current_state")
+        fake_objective.compute.assert_called_once_with("current_state")
+
+    def test_if_computed_result_is_returned(self, fake_objective):
+        assert fake_objective()("current_state") == "result"
 
 
 class TestRegularIntervalObjective:

@@ -1,9 +1,8 @@
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 import pytest
-import torch
 
-from featurevis import integration
+from mei import integration
 
 
 class FakeModel:
@@ -31,7 +30,6 @@ def fake_trained_model_table():
             primary_key = None
             models = []
 
-            # noinspection PyUnusedLocal
             @classmethod
             def load_model(cls, key):
                 model = FakeModel(key["trained_model_attr"] + 1)
@@ -106,7 +104,7 @@ class TestHashListOfDictionaries:
 
     @staticmethod
     def hash_and_compare(list_of_dicts1, list_of_dicts2):
-        hashed1, hashed2 = (integration.hash_list_of_dictionaries(l) for l in (list_of_dicts1, list_of_dicts2))
+        hashed1, hashed2 = (integration.hash_list_of_dictionaries(x) for x in (list_of_dicts1, list_of_dicts2))
         return hashed1 == hashed2
 
     def test_invariance_to_dictionary_key_order(self):
@@ -118,77 +116,3 @@ class TestHashListOfDictionaries:
         list_of_dicts1 = [dict(a=3, b=5), dict(a=1, b=2), dict(a=2, b=8)]
         list_of_dicts2 = [dict(a=1, b=2), dict(a=3, b=5), dict(a=2, b=8)]
         assert self.hash_and_compare(list_of_dicts1, list_of_dicts2)
-
-
-class TestEnsembleModel:
-    @pytest.fixture
-    def members(self):
-        member1 = MagicMock(return_value=torch.tensor([1.0, 2.0, 3.0]))
-        member2 = MagicMock(return_value=torch.tensor([4.0, 5.0, 6.0]))
-        member3 = MagicMock(return_value=torch.tensor([7.0, 8.0, 9.0]))
-        return member1, member2, member3
-
-    def test_if_input_is_passed_to_ensemble_members(self, members):
-        ensemble = integration.EnsembleModel(*members)
-        ensemble("x", "arg", kwarg="kwarg")
-        for member in members:
-            member.assert_called_once_with("x", "arg", kwarg="kwarg")
-
-    def test_if_outputs_of_ensemble_members_is_correctly_averaged(self, members):
-        ensemble = integration.EnsembleModel(*members)
-        output = ensemble("x")
-        assert torch.allclose(output, torch.tensor([4.0, 5.0, 6.0]))
-
-    def test_if_eval_mode_is_passed_to_ensemble_members(self, members):
-        ensemble = integration.EnsembleModel(*members)
-        ensemble.eval()
-        for member in members:
-            member.eval.assert_called_once_with()
-
-    def test_if_to_is_correctly_called_on_all_ensemble_members(self, members):
-        ensemble = integration.EnsembleModel(*members)
-        ensemble.to("arg", kwarg="kwarg")
-        for member in members:
-            member.to.assert_called_once_with("arg", kwarg="kwarg")
-
-    def test_repr(self):
-        ensemble = integration.EnsembleModel("member1", "member2", "member3")
-        assert str(ensemble) == "EnsembleModel(member1, member2, member3)"
-
-
-class TestConstrainedOutputModel:
-    @pytest.fixture
-    def model(self):
-        return MagicMock(return_value=torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0]]))
-
-    def test_if_input_is_passed_to_model(self, model):
-        constrained_model = integration.ConstrainedOutputModel(model, 0)
-        constrained_model("x", "arg", kwarg="kwarg")
-        model.assert_called_once_with("x", "arg", kwarg="kwarg")
-
-    @pytest.mark.parametrize("constraint,expected", [(0, 1.0), (1, 2.0), (2, 3.0), (3, 4.0), (4, 5.0)])
-    def test_if_output_constraint_is_correct(self, model, constraint, expected):
-        constrained_model = integration.ConstrainedOutputModel(model, constraint)
-        output = constrained_model("x")
-        assert torch.allclose(output, torch.tensor([expected]))
-
-    def test_if_eval_mode_is_passed_to_model(self, model):
-        constrained_model = integration.ConstrainedOutputModel(model, 0)
-        constrained_model.eval()
-        model.eval.assert_called_once_with()
-
-    def test_if_cuda_is_passed_to_model(self, model):
-        constrained_model = integration.ConstrainedOutputModel(model, 0)
-        constrained_model.to("arg", kwarg="kwarg")
-        model.to.assert_called_once_with("arg", kwarg="kwarg")
-
-    def test_if_forward_kwargs_are_passed_to_model(self, model):
-        constrained_model = integration.ConstrainedOutputModel(
-            model, 0, forward_kwargs=dict(forward_kwarg="forward_kwarg")
-        )
-        constrained_model("x")
-        model.assert_called_once_with("x", forward_kwarg="forward_kwarg")
-
-    def test_repr(self):
-        constrained_model = integration.ConstrainedOutputModel("model", 0, forward_kwargs=dict(kwarg="kwarg"))
-        assert str(constrained_model) == "ConstrainedOutputModel(model, 0, forward_kwargs={'kwarg': 'kwarg'})"
