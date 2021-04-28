@@ -6,6 +6,7 @@ from typing import Callable, Tuple
 import torch
 from torch import Tensor
 from torch.optim.optimizer import Optimizer
+from torch.optim import LBFGS
 
 from .domain import Input, State
 from .stoppers import OptimizationStopper
@@ -93,8 +94,24 @@ class MEI:
         """Evaluates the function on the current MEI."""
         return self.func(self._transformed_input)
 
+    def closure(self) -> Tensor:
+        state = dict(i_iter=self.i_iteration, input_=self._current_input.cloned_data)
+        self.optimizer.zero_grad()
+        evaluation = self.evaluate()
+        state["evaluation"] = evaluation.item()
+        reg_term = self.regularization(self._transformed_input, self.i_iteration)
+        state["reg_term"] = reg_term.item()
+        state["transformed_input"] = self._transformed_input.data.cpu().clone()
+        (-evaluation + reg_term).backward()
+        self._current_input.grad = self.precondition(
+            self._current_input.grad, self.i_iteration
+        )
+        return (-evaluation + reg_term)
+
     def step(self) -> State:
         """Performs an optimization step."""
+        if isinstance(self.optimizer, LBFGS):
+            self.optimizer.step(self.closure)
         state = dict(i_iter=self.i_iteration, input_=self._current_input.cloned_data)
         self.optimizer.zero_grad()
         evaluation = self.evaluate()
@@ -110,7 +127,11 @@ class MEI:
             self._current_input.grad, self.i_iteration
         )
         state["preconditioned_grad"] = self._current_input.cloned_grad
-        self.optimizer.step()
+
+        if isinstance(self.optimizer, LBFGS):
+            self.optimizer.step(self.closure)
+        else:
+            self.optimizer.step()
         self._current_input.data = self.postprocessing(
             self._current_input.data, self.i_iteration
         )
