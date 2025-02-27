@@ -10,7 +10,7 @@ setup(
     license="MIT",
     url="https://github.com/sinzlab/mei",
     keywords="feature visualization MEI pytorch",
-    packages=["mei"],
+    packages=["mei", "mei.legacy"],
     install_requires=["torch>=0.4.0", "scipy", "numpy", "torchvision", "datajoint", "nnfabrik", "pytest"],
     classifiers=[
         "Development Status :: 3 - Alpha",
